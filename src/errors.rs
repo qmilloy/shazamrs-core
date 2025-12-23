@@ -1,37 +1,31 @@
-use pyo3::exceptions::PyException;
-use pyo3::types::PyString;
-use pyo3::{pyclass, pymethods, PyErrArguments, PyObject, PyResult, Python, ToPyObject};
+use std::fmt;
+use thiserror::Error;
 
-trait BaseException {
-    fn __str__(&self) -> PyResult<String>;
-    fn __repr__(&self) -> PyResult<String>;
-}
-
-#[pyclass(extends = PyException)]
+/// Error returned when signature generation or decoding fails.
+#[derive(Debug, Error, Clone)]
 pub struct SignatureError {
     message: String,
 }
 
-#[pymethods]
 impl SignatureError {
-    #[new]
     pub fn new(message: String) -> Self {
-        SignatureError { message }
+        Self { message }
     }
 }
 
-impl BaseException for SignatureError {
-    fn __str__(&self) -> PyResult<String> {
-        Ok(self.message.to_string())
-    }
-
-    fn __repr__(&self) -> PyResult<String> {
-        Ok(format!("SignatureError({message})", message = self.message))
+impl fmt::Display for SignatureError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message)
     }
 }
 
-impl PyErrArguments for SignatureError {
-    fn arguments(self, py: Python) -> PyObject {
-        PyString::new(py, &self.message).to_object(py)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn signature_error_displays_message() {
+        let err = SignatureError::new("boom".to_string());
+        assert_eq!(err.to_string(), "boom");
     }
 }
