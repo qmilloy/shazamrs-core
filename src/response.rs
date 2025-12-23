@@ -1,79 +1,75 @@
-use pyo3::{pyclass, pymethods, PyResult};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize)]
-#[pyclass]
-pub(crate) struct Geolocation {
-    #[pyo3(get)]
-    pub(crate) altitude: i16,
-    #[pyo3(get)]
-    pub(crate) latitude: i8,
-    #[pyo3(get)]
-    pub(crate) longitude: i8,
+pub struct Geolocation {
+    pub altitude: i16,
+    pub latitude: i8,
+    pub longitude: i8,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-#[pyclass]
-pub(crate) struct SignatureSong {
-    #[pyo3(get)]
-    pub(crate) samples: u32,
-    #[pyo3(get)]
-    pub(crate) timestamp: u32,
-    #[pyo3(get)]
-    pub(crate) uri: String,
+pub struct SignatureSong {
+    pub samples: u32,
+    pub timestamp: u32,
+    pub uri: String,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-#[pyclass]
-pub(crate) struct Signature {
-    #[pyo3(get)]
-    pub(crate) geolocation: Geolocation,
-    #[pyo3(get)]
-    pub(crate) signature: SignatureSong,
-    #[pyo3(get)]
-    pub(crate) timestamp: u32,
-    #[pyo3(get)]
-    pub(crate) timezone: String,
+pub struct Signature {
+    pub geolocation: Geolocation,
+    pub signature: SignatureSong,
+    pub timestamp: u32,
+    pub timezone: String,
 }
 
-#[pymethods]
 impl Geolocation {
-    #[new]
-    pub fn new(altitude: i16, latitude: i8, longitude: i8) -> PyResult<Self> {
-        Ok(Geolocation {
+    pub fn new(altitude: i16, latitude: i8, longitude: i8) -> Self {
+        Self {
             altitude,
             latitude,
             longitude,
-        })
+        }
     }
 }
 
-#[pymethods]
 impl SignatureSong {
-    #[new]
-    pub fn new(samples: u32, timestamp: u32, uri: String) -> PyResult<Self> {
-        Ok(SignatureSong {
+    pub fn new(samples: u32, timestamp: u32, uri: String) -> Self {
+        Self {
             samples,
             timestamp,
             uri,
-        })
+        }
     }
 }
 
-#[pymethods]
 impl Signature {
-    #[new]
     pub fn new(
         geolocation: Geolocation,
         signature: SignatureSong,
         timestamp: u32,
         timezone: String,
-    ) -> PyResult<Self> {
-        Ok(Signature {
+    ) -> Self {
+        Self {
             geolocation,
             signature,
             timestamp,
             timezone,
-        })
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn can_create_signature_structs() {
+        let geo = Geolocation::new(100, 10, 20);
+        let song = SignatureSong::new(1024, 123, "test://uri".to_string());
+        let sig = Signature::new(geo, song, 456, "UTC".to_string());
+
+        assert_eq!(sig.timestamp, 456);
+        assert_eq!(sig.timezone, "UTC");
+        assert_eq!(sig.signature.samples, 1024);
     }
 }

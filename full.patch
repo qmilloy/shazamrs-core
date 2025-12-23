@@ -1,0 +1,197 @@
+diff --git a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -8,9 +8,8 @@
+ rust-version = "1.62"
+
+ [lib]
+-name = "shazamio_core"
+-crate-type = ["cdylib", "lib"]
++name = "shazamio_core"
++crate-type = ["lib"]
+
+ [dependencies]
+ tokio = { version = "1.43.0" }
+@@ -29,15 +28,8 @@
+ bytes = "1.10.0"
+-pyo3 = "=0.20.2"
+-pyo3-asyncio = { version = "0.20.0", features = ["async-std-runtime", "async-std", "tokio", "tokio-runtime"] }
+-pyo3-log = "=0.8.4"
+ log = "0.4.20"
++thiserror = "1.0"
+
+-[features]
+-default = ["pyo3/extension-module"]
+diff --git a/pyproject.toml b/pyproject.toml
+deleted file mode 100644
+--- a/pyproject.toml
++++ /dev/null
+@@ -1,37 +0,0 @@
+-[tool.poetry]
+-name = "shazamio_core"
+-version = "1.1.2"
+-description = ""
+-authors = ["dotX12 <dev@shitposting.team>"]
+-readme = "README.md"
+-packages = [{include = "shazamio_core"}]
+-
+-[tool.poetry.dependencies]
+-python = "^3.9"
+-
+-[tool.poetry.group.dev.dependencies]
+-maturin = "^1.8.1"
+-
+-[build-system]
+-requires = ["maturin>=1.4.0"]
+-build-backend = "maturin"
+-
+-[project]
+-name = "shazamio_core"
+-requires-python = ">=3.9"
+-classifiers = [
+-    "Programming Language :: Rust",
+-    "Programming Language :: Python :: Implementation :: CPython",
+-    "Programming Language :: Python :: Implementation :: PyPy",
+-]
+-dynamic = ["version"]
+-
+-[tool.maturin]
+-bindings = "pyo3"
+diff --git a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,14 +1,13 @@
+ mod errors;
+ mod fingerprinting;
+ mod response;
+ mod utils;
+ mod params;
+
+ use crate::errors::SignatureError;
+-use crate::response::{Geolocation, Signature, SignatureSong};
++use crate::response::Signature;
+ use crate::params::SearchParams;
+-use crate::utils::convert_signature_to_py;
+-use crate::utils::get_python_future;
+-use crate::utils::unwrap_decoded_signature;
++use crate::utils::{convert_signature, unwrap_decoded_signature};
+ use fingerprinting::algorithm::SignatureGenerator;
+-use pyo3::prelude::*;
+-use pyo3::{pyclass, pymethods, pymodule, PyErr, PyObject, PyResult, Python, ToPyObject};
+ use log::{info, debug, error};
+
+ #[derive(Clone)]
+-pub struct Recognizer {
+-    segment_duration_seconds: u32,
+-}
++pub struct Recognizer { segment_duration_seconds: u32 }
+
+ impl Recognizer {
+     pub fn new(segment_duration_seconds: Option<u32>) -> Self {
+@@ -39,8 +38,9 @@
+         ).map_err(|e| SignatureError::new(e.to_string()))?;
+
+-        let signature = unwrap_decoded_signature(data)?;
+-        Ok(signature)
++        let sig = unwrap_decoded_signature(data)?;
++        Ok(convert_signature(sig))
+     }
+
+     pub async fn recognize_path(
+@@ -57,8 +57,9 @@
+         ).map_err(|e| SignatureError::new(e.to_string()))?;
+
+-        let signature = unwrap_decoded_signature(data)?;
+-        Ok(signature)
++        let sig = unwrap_decoded_signature(data)?;
++        Ok(convert_signature(sig))
+     }
+ }
+diff --git a/src/errors.rs b/src/errors.rs
+--- a/src/errors.rs
++++ b/src/errors.rs
+@@ -1,40 +1,14 @@
+-use pyo3::exceptions::PyException;
+-use pyo3::types::PyString;
+-use pyo3::{pyclass, pymethods, PyErrArguments, PyObject, PyResult, Python, ToPyObject};
++use std::fmt;
++use thiserror::Error;
+
+-#[pyclass(extends = PyException)]
++#[derive(Debug, Error, Clone)]
+ pub struct SignatureError {
+     message: String,
+ }
+
+-#[pymethods]
+ impl SignatureError {
+     pub fn new(message: String) -> Self {
+         SignatureError { message }
+     }
+ }
+
+-impl PyErrArguments for SignatureError {
+-    fn arguments(self, py: Python) -> PyObject {
+-        PyString::new(py, &self.message).to_object(py)
+-    }
+-}
++impl fmt::Display for SignatureError {
++    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
++        write!(f, "{}", self.message)
++    }
++}
+diff --git a/src/params.rs b/src/params.rs
+--- a/src/params.rs
++++ b/src/params.rs
+@@ -1,11 +1,8 @@
+-use pyo3::{pyclass, pymethods};
+ use serde::{Deserialize, Serialize};
+
+ #[derive(Debug, Clone, Serialize, Deserialize)]
+-#[pyclass]
+-pub(crate) struct SearchParams {
+-    #[pyo3(get, set)]
+-    pub(crate) segment_duration_seconds: u32,
++pub struct SearchParams {
++    pub segment_duration_seconds: u32,
+ }
+diff --git a/src/response.rs b/src/response.rs
+--- a/src/response.rs
++++ b/src/response.rs
+@@ -1,6 +1,5 @@
+-use pyo3::{pyclass, pymethods, PyResult};
+ use serde::{Deserialize, Serialize};
+
+ #[derive(Clone, Serialize, Deserialize)]
+-pub(crate) struct Geolocation {
++pub struct Geolocation {
+diff --git a/src/utils.rs b/src/utils.rs
+--- a/src/utils.rs
++++ b/src/utils.rs
+@@ -6,43 +6,18 @@
+ use crate::fingerprinting::signature_format::DecodedSignature;
+ use crate::response::{Geolocation, Signature, SignatureSong};
+-use pyo3::{IntoPy, Py, PyAny, PyErr, PyResult, Python};
+-use std::future::Future;
+-use tokio::task;
+
+-pub fn convert_signature_to_py(signature: communication::Signature) -> PyResult<Signature> {
++pub fn convert_signature(signature: communication::Signature) -> Signature {
+     Signature::new(
+         Geolocation::new(
+             signature.geolocation.altitude,
+@@ -30,12 +5,8 @@
+         signature.timezone,
+     )
+ }
+
+-pub fn unwrap_decoded_signature(data: DecodedSignature) -> Result<communication::Signature, PyErr> {
+-    get_signature_json(&data).map_err(|e| {
+-        let error_message = format!("{}", e);
+-        PyErr::new::<SignatureError, _>(SignatureError::new(error_message))
+-    })
++pub fn unwrap_decoded_signature(
++    data: DecodedSignature,
++) -> Result<communication::Signature, SignatureError> {
++    get_signature_json(&data).map_err(|e| SignatureError::new(e.to_string()))
+ }
