@@ -1,4 +1,4 @@
-use shazamio_core::Recognizer;
+use shazamrs_core::Recognizer;
 
 #[tokio::test]
 async fn recognizer_fails_on_invalid_path() {

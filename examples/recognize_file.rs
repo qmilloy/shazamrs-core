@@ -1,4 +1,4 @@
-use shazamio_core::{Recognizer, SearchParams};
+use shazamrs_core::{Recognizer, SearchParams};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
