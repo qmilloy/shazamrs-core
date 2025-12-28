@@ -4,9 +4,9 @@ mod params;
 mod response;
 mod utils;
 
-use crate::errors::SignatureError;
+pub use crate::errors::SignatureError;
 pub use crate::params::SearchParams;
-use crate::response::Signature;
+pub use crate::response::Signature;
 use crate::utils::{convert_signature, unwrap_decoded_signature};
 use fingerprinting::algorithm::SignatureGenerator;
 use log::{debug, info};
