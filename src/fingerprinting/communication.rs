@@ -3,6 +3,7 @@ use std::time::SystemTime;
 
 use crate::fingerprinting::signature_format::DecodedSignature;
 
+/// Placeholder geolocation, in the shape Shazam's discovery API expects.
 #[derive(Debug)]
 pub struct GeolocationResponse {
     pub(crate) altitude: i16,
@@ -10,6 +11,8 @@ pub struct GeolocationResponse {
     pub(crate) longitude: i8,
 }
 
+/// Encoded fingerprint and sample metadata, in the shape Shazam's
+/// discovery API expects.
 #[derive(Debug)]
 pub struct SignatureSong {
     pub(crate) samples: u32,
@@ -17,6 +20,10 @@ pub struct SignatureSong {
     pub(crate) uri: String,
 }
 
+/// The full request payload shape sent to Shazam's discovery API.
+///
+/// Converted into the crate's public [`crate::response::Signature`] by
+/// [`crate::utils::convert_signature`].
 #[derive(Debug)]
 pub struct Signature {
     pub(crate) geolocation: GeolocationResponse,
@@ -25,6 +32,11 @@ pub struct Signature {
     pub(crate) timezone: String,
 }
 
+/// Build a [`Signature`] request payload from a [`DecodedSignature`].
+///
+/// Encodes the fingerprint to its base64 URI form, stamps it with the
+/// current time, and attaches a fixed placeholder geolocation/timezone
+/// (this crate does not use the device's real location).
 pub fn get_signature_json(signature: &DecodedSignature) -> Result<Signature, Box<dyn Error>> {
     let timestamp_ms = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)?

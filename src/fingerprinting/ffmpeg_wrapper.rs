@@ -10,10 +10,13 @@ use std::io::Cursor;
 use std::process::Command;
 use tempfile::Builder;
 
-/// This function used to decode a file with FFMpeg, if it is installed on
-/// the system, in the case where Rodio can't decode the concerned format
-/// (for example with .WMA, .M4A, etc.).
-
+/// Decode a file with FFmpeg, if it is installed on the system, for cases
+/// where `rodio` can't decode the format (for example `.wma`, `.m4a`, etc.).
+///
+/// Locates an `ffmpeg`/`ffmpeg.exe` binary (on `PATH` or next to the
+/// current executable), transcodes `file_path` to a temporary `.wav` file,
+/// and hands that off to `rodio`. Returns `None` if `ffmpeg` isn't found or
+/// the conversion fails.
 pub fn decode_with_ffmpeg(file_path: &str) -> Option<Decoder<BufReader<File>>> {
     // Find the path for FFMpeg, in the case where it is installed
 
@@ -84,6 +87,16 @@ pub fn decode_with_ffmpeg(file_path: &str) -> Option<Decoder<BufReader<File>>> {
     None
 }
 
+/// Byte-buffer equivalent of [`decode_with_ffmpeg`], for audio that isn't
+/// already on disk.
+///
+/// Writes `bytes` to a temporary file, transcodes it to `.wav` via
+/// `ffmpeg`, and reads the result back into memory for decoding.
+///
+/// # Errors
+///
+/// Returns an error if `ffmpeg` isn't found on the system, the input can't
+/// be written to a temp file, or the conversion fails.
 pub fn decode_with_ffmpeg_from_bytes(
     bytes: &[u8],
 ) -> Result<Decoder<Cursor<Vec<u8>>>, Box<dyn Error>> {

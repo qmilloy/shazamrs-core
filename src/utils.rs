@@ -4,6 +4,8 @@ use crate::fingerprinting::communication::get_signature_json;
 use crate::fingerprinting::signature_format::DecodedSignature;
 use crate::response::{Geolocation, Signature, SignatureSong};
 
+/// Convert an internal, wire-format [`communication::Signature`] into the
+/// public [`Signature`] type returned by [`crate::Recognizer`].
 pub fn convert_signature(signature: communication::Signature) -> Signature {
     Signature::new(
         Geolocation::new(
@@ -21,6 +23,8 @@ pub fn convert_signature(signature: communication::Signature) -> Signature {
     )
 }
 
+/// Finalize a [`DecodedSignature`] (raw FFT peak data) into a
+/// [`communication::Signature`] ready to be encoded and sent to Shazam.
 pub fn unwrap_decoded_signature(
     data: DecodedSignature,
 ) -> Result<communication::Signature, SignatureError> {

@@ -1,6 +1,8 @@
-/// Multipliers for applying hanning window over 2048 entries, with
-/// leading and trailing zeroes omitted.
-
+/// Precomputed Hanning window coefficients for a 2048-sample frame.
+///
+/// Applied to the reordered ring buffer in
+/// [`crate::fingerprinting::algorithm::SignatureGenerator`] before each FFT
+/// pass, to reduce spectral leakage.
 pub const HANNING_WINDOW_2048_MULTIPLIERS: [f32; 2048] = [
     0.0000023508,
     0.0000094032,
