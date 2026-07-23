@@ -169,3 +169,57 @@ impl DecodedSignature {
     }
 
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use byteorder::ReadBytesExt;
+
+    fn empty_signature(sample_rate_hz: u32, number_samples: u32) -> DecodedSignature {
+        DecodedSignature {
+            sample_rate_hz,
+            number_samples,
+            frequency_band_to_sound_peaks: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn encode_to_binary_writes_header_magic_and_valid_crc() {
+        let signature = empty_signature(16000, 160000);
+        let bytes = signature.encode_to_binary().unwrap();
+
+        // No frequency bands were added, so this is header-only.
+        assert_eq!(bytes.len(), 56);
+
+        let mut cursor = Cursor::new(&bytes);
+        assert_eq!(cursor.read_u32::<LittleEndian>().unwrap(), 0xcafe2580);
+
+        let stored_crc = cursor.read_u32::<LittleEndian>().unwrap();
+        let size_minus_header = cursor.read_u32::<LittleEndian>().unwrap();
+        assert_eq!(size_minus_header, bytes.len() as u32 - 48);
+        assert_eq!(cursor.read_u32::<LittleEndian>().unwrap(), 0x94119c00);
+
+        let mut hasher = Hasher::new();
+        hasher.update(&bytes[8..]);
+        assert_eq!(stored_crc, hasher.finalize());
+    }
+
+    #[test]
+    fn encode_to_uri_round_trips_through_base64() {
+        let signature = empty_signature(16000, 160000);
+        let binary = signature.encode_to_binary().unwrap();
+        let uri = signature.encode_to_uri().unwrap();
+
+        assert!(uri.starts_with(DATA_URI_PREFIX));
+        let decoded = general_purpose::STANDARD
+            .decode(&uri[DATA_URI_PREFIX.len()..])
+            .unwrap();
+        assert_eq!(decoded, binary);
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid sample rate")]
+    fn encode_to_binary_panics_on_unsupported_sample_rate() {
+        let _ = empty_signature(12345, 0).encode_to_binary();
+    }
+}

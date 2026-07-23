@@ -340,3 +340,52 @@ impl SignatureGenerator {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::f32::consts::PI;
+
+    fn sine_wave_samples(
+        frequency_hz: f32,
+        sample_rate_hz: u32,
+        duration_seconds: f32,
+        amplitude: i16,
+    ) -> Vec<i16> {
+        let num_samples = (sample_rate_hz as f32 * duration_seconds) as usize;
+        (0..num_samples)
+            .map(|i| {
+                let t = i as f32 / sample_rate_hz as f32;
+                (amplitude as f32 * (2.0 * PI * frequency_hz * t).sin()) as i16
+            })
+            .collect()
+    }
+
+    #[test]
+    fn detects_peaks_in_expected_frequency_band_for_pure_tone() {
+        // A 1 kHz tone falls within the 520 Hz-1450 Hz band.
+        let samples = sine_wave_samples(1000.0, 16000, 2.0, 12000);
+
+        let signature = SignatureGenerator::make_signature_from_buffer(samples);
+
+        let peaks = signature
+            .frequency_band_to_sound_peaks
+            .get(&FrequencyBand::_520_1450)
+            .expect("expected peaks in the 520-1450 Hz band");
+        assert!(!peaks.is_empty());
+    }
+
+    #[test]
+    fn silence_produces_no_peaks() {
+        let samples = vec![0i16; 16000 * 2];
+
+        let signature = SignatureGenerator::make_signature_from_buffer(samples);
+
+        let total_peaks: usize = signature
+            .frequency_band_to_sound_peaks
+            .values()
+            .map(|peaks| peaks.len())
+            .sum();
+        assert_eq!(total_peaks, 0);
+    }
+}
