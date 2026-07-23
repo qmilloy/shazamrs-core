@@ -8,6 +8,7 @@ pub struct SignatureError {
 }
 
 impl SignatureError {
+    /// Create a new `SignatureError` carrying the given display message.
     pub fn new(message: String) -> Self {
         Self { message }
     }

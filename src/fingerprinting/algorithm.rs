@@ -6,6 +6,18 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::io::{BufReader, Cursor};
 
+/// Streaming FFT/peak-picking engine that turns 16 kHz mono PCM audio into
+/// a [`DecodedSignature`] (a Shazam-compatible fingerprint).
+///
+/// This is a fairly direct port of Shazam's own signature algorithm: audio
+/// is processed in 128-sample steps through a 2048-sample sliding window
+/// (with a Hanning window applied), FFT'd, and scanned for local-maximum
+/// frequency peaks across both the frequency and time domains. Peaks are
+/// bucketed into one of four frequency bands (250–520 Hz, 520–1450 Hz,
+/// 1450–3500 Hz, 3500–5500 Hz) to build the final fingerprint.
+///
+/// Use one of the `make_signature_from_*` associated functions rather than
+/// constructing this type directly.
 pub struct SignatureGenerator {
     ring_buffer_of_samples: Vec<i16>,
     reordered_ring_buffer_of_samples: Vec<f32>,
@@ -20,6 +32,13 @@ pub struct SignatureGenerator {
 }
 
 impl SignatureGenerator {
+    /// Decode an in-memory audio buffer and generate its signature.
+    ///
+    /// Tries `rodio` first, falling back to an `ffmpeg` subprocess (via
+    /// [`decode_with_ffmpeg_from_bytes`]) if `rodio` can't decode the
+    /// format. The decoded audio is downsampled to 16 kHz mono, and only a
+    /// `segment_duration_seconds`-long slice (default 10s) taken from the
+    /// middle of the track is fingerprinted.
     pub fn make_signature_from_bytes(bytes: Vec<u8>, segment_duration_seconds: Option<u32>) -> Result<DecodedSignature, Box<dyn Error>> {
         // Create a cursor around the byte array for decoding
         let cursor = Cursor::new(bytes.clone());
@@ -58,6 +77,13 @@ impl SignatureGenerator {
         // Return the generated signature
         Ok(signature)
     }
+    /// Decode an audio file from disk and generate its signature.
+    ///
+    /// Tries `rodio` first, falling back to an `ffmpeg` subprocess (via
+    /// [`decode_with_ffmpeg`]) if `rodio` can't decode the format (e.g.
+    /// `.wma`, `.m4a`). The decoded audio is downsampled to 16 kHz mono,
+    /// and only a `segment_duration_seconds`-long slice (default 10s)
+    /// taken from the middle of the track is fingerprinted.
     pub fn make_signature_from_file(file_path: &str, segment_duration_seconds: Option<u32>) -> Result<DecodedSignature, Box<dyn Error>> {
         // Decode the .WAV, .MP3, .OGG or .FLAC file
 
@@ -93,6 +119,12 @@ impl SignatureGenerator {
         Ok(res)
     }
 
+    /// Run the FFT/peak-picking algorithm directly over already-decoded
+    /// signed 16-bit mono PCM samples at a 16 kHz sample rate.
+    ///
+    /// This is the core routine that [`Self::make_signature_from_file`] and
+    /// [`Self::make_signature_from_bytes`] both delegate to once decoding
+    /// and downsampling are done.
     pub fn make_signature_from_buffer(s16_mono_16khz_buffer: Vec<i16>) -> DecodedSignature {
         let mut this = SignatureGenerator {
             ring_buffer_of_samples: vec![0i16; 2048],
