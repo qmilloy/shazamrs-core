@@ -58,3 +58,35 @@ pub fn get_signature_json(signature: &DecodedSignature) -> Result<Signature, Box
         timezone: "Europe/Paris".to_string(),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn empty_decoded_signature(sample_rate_hz: u32, number_samples: u32) -> DecodedSignature {
+        DecodedSignature {
+            sample_rate_hz,
+            number_samples,
+            frequency_band_to_sound_peaks: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn uses_fixed_placeholder_geolocation_and_timezone() {
+        let signature = get_signature_json(&empty_decoded_signature(16000, 16000)).unwrap();
+
+        assert_eq!(signature.geolocation.altitude, 300);
+        assert_eq!(signature.geolocation.latitude, 45);
+        assert_eq!(signature.geolocation.longitude, 2);
+        assert_eq!(signature.timezone, "Europe/Paris");
+    }
+
+    #[test]
+    fn computes_sample_duration_in_milliseconds() {
+        // 8000 samples at 16 kHz is 500 ms.
+        let signature = get_signature_json(&empty_decoded_signature(16000, 8000)).unwrap();
+
+        assert_eq!(signature.signature.samples, 500);
+    }
+}
